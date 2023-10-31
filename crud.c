@@ -15,6 +15,16 @@ typedef struct funcionario
     struct funcionario *prox;
 } Funcionario;
 
+typedef struct produto
+{
+    int codigo_produto;
+    char desc_produto[30];
+    char armazem[2];
+    char endereco[5];
+    float custo_unitario;
+    struct produto *prox;
+} Produto;
+
 // Definindo uma estrutura para representar uma lista encadeada
 typedef struct lista
 {
