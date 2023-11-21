@@ -12,45 +12,14 @@
 #include "modulo.h"
 
 void menuLogin();
+void menuPrincipal();
+void centralizaTextoPdAmbos();
+void centralizaTextoPdEsquerda();
 
-void menuFuncionario()
+int main()
 {
-    int opcao;
-
-    do
-    {
-        cabecaMenuFuncionario();
-        printf("Digite a sua opcao: ");
-        scanf(" %i", &opcao);
-        getchar();
-
-        switch (opcao)
-        {
-        case 1:
-            moduloFuncionario(1);
-            break;
-        case 2:
-            moduloFuncionario(2);
-            break;
-        case 3:
-            moduloFuncionario(3);
-            break;
-        case 4:
-            moduloFuncionario(4);
-            break;
-        case 5:
-            moduloFuncionario(5);
-            break;
-        case 6:
-            system("cls");
-            break;
-        default:
-            printf(msg_erro_entrada);
-            sleep(1);
-            system("cls");
-            break;
-        }
-    } while (opcao != 6);
+    menuLogin();
+    return 0;
 }
 
 void menuPrincipal()
@@ -66,11 +35,11 @@ void menuPrincipal()
         {
         case 1:
             system("cls");
-            menuFuncionario();
+            moduloFuncionario();
             break;
         case 2:
-            //menu_produto();
             system("cls");
+            moduloVenda();
             break;
         case 3:
             exit(1);
@@ -161,10 +130,4 @@ void menuLogin() {
     system("pause");
     system("cls");
     menuPrincipal();
-}
-
-int main()
-{
-    menuLogin();
-    return 0;
 }

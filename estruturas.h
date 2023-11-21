@@ -1,11 +1,6 @@
 #ifndef ESTRUTURAS_H
 #define ESTRUTURAS_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
 typedef struct Funcionario
 {
     char cpf[12];
@@ -20,7 +15,15 @@ typedef struct Funcionario
     int situacao;
 } Funcionario;
 
-typedef struct odbcConfig
+typedef struct Venda
+{
+    char cnpj[15];
+    int prod;
+    int qtde_venda;
+    float valor_venda;
+} Venda;
+
+typedef struct OdbcConfig
 {
     char driver[256];
     char server[256];

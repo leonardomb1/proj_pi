@@ -18,8 +18,8 @@ void cabecaMenuInicio()
 {
     printf("Sistema de recursos empresariais - %s \n", NOME_EMPRESA);
     printf("Escolha uma opcao:\n");
-    printf("1 - Menu de cadastro de funcionarios\n");
-    printf("2 - Menu de cadastro de produtos\n");    
+    printf("1 - Menu de administracao de funcionarios\n");
+    printf("2 - Menu de administracao de vendas\n");    
     printf("3 - Sair do Sistema\n");
     printf("4 - Entrar com outro usuario\n");
 }
@@ -33,7 +33,23 @@ void cabecaMenuFuncionario()
     printf("3 - Atualizar um cadastro\n");
     printf("4 - Deletar um cadastro pelo cpf\n");
     printf("5 - Listar todos os cadastros\n");
-    printf("6 - Sair do modulo\n");
+    printf("6 - Alteracao salarial\n");
+    printf("7 - Cadastro de Cargo\n");
+    printf("8 - Exportar relatorio\n");
+    printf("9 - Sair do modulo\n");
+}
+
+void cabecaMenuVenda()
+{
+    printf("Sistema de administracao de vendas\n");
+    printf("Escolha uma opcao:\n");
+    printf("1 - Cadastrar cliente\n");
+    printf("2 - Cadastrar uma venda\n");
+    printf("3 - Deletar um cadastro pelo cnpj\n");
+    printf("4 - Listar todos os cadastros\n");
+    printf("5 - Listar todas as vendas\n");
+    printf("6 - Exportar relatorio\n");
+    printf("7 - Sair do modulo\n");
 }
 
 void escolhaAlteracaoFuncionario()
@@ -55,6 +71,22 @@ void printCell(const char* content, int maxWidth) {
     int rightPadding = padding - leftPadding;
 
     printf("| %*s%s%*s |", leftPadding, "", content, rightPadding, "");
+}
+
+void escolhaAlteracaoSalarial()
+{
+    printf("Escolha uma opcao:\n");
+    printf("1 - Promocao de Cargo\n");
+    printf("2 - Promocao em Funcao\n");
+    printf("3 - Aumento em Acrescimo\n");
+    printf("4 - Aumento em Porcentual\n");
+    printf("5 - Reajuste da Folha\n");
+    printf("6 - Sair\n");
+}
+
+void errosPrint(int fn)
+{
+    (fn != 1) ? printf("\nErro numero: %i", fn) : 1;
 }
 
 char msg_erro_entrada[30] = "Entrada Invalida!\n";
