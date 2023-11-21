@@ -9,6 +9,14 @@
 #include "estruturas.h"
 #include "interface.h"
 
+#define SUCESSO 1
+#define ERRO_CONFIG 10
+#define ERRO_ALOCACAO_MEMORIA 11
+#define ERRO_EXECUCAO_DRIVER 12
+#define ERRO_EXECUTAR_CONSULTA 13
+#define ERRO_INTERPRETACAO_CONSULTA 14
+#define ERRO_ABRIR_ARQUIVO 15
+
 char usuario[50];
 char senha[50];
 SQLINTEGER usrid;
@@ -18,12 +26,12 @@ SQLHDBC dbc;
 SQLHSTMT stmt;
 SQLRETURN ret;
 
+
 int leitorConfig(const char* arquivo, OdbcConfig* config)
 {
     FILE* file = fopen(arquivo, "r");
     if (file == NULL) {
-        printf("Erro ao abrir o arquivo .ini.\n");
-        return 0;
+        return ERRO_CONFIG;
     }
 
     char line[256];
@@ -44,39 +52,45 @@ int leitorConfig(const char* arquivo, OdbcConfig* config)
         }
     }
 
-    return 1;
+    return SUCESSO;
     fclose(file);
 }
 
-void iniciarServico()
+int iniciarServico()
 {
+    int exec;
+    char conn_str[256]; 
+    struct OdbcConfig conn;
+
     SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &env);
     SQLSetEnvAttr(env, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, 0);
     SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
 
-    struct odbcConfig conn; 
-    char conn_str[256];
-    if (leitorConfig("config.ini", &conn)) {
+    exec = leitorConfig("config.ini", &conn);
+
+    if (exec == 1) {
         snprintf(conn_str, sizeof(conn_str),
                 "DRIVER={%s};SERVER=%s;DATABASE=%s;UID=%s;PWD=%s",
                 conn.driver, conn.server, conn.database,
                 conn.user, conn.password);
-    } else {
-        printf("Falha na leitura do arquivo de configuracao.\n");
+    }
+
+    else {
+        return exec;
     }
 
     ret = SQLDriverConnect(dbc, NULL, (SQLCHAR*)conn_str, SQL_NTS, NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
 
     if (SQL_SUCCEEDED(ret)) {
-        printf("Conectado ao Servidor.\n");
+        return SUCESSO;
     }
 
     else {
-        printf("Erro na conexao ao Azure SQL.\n");
+        return ERRO_EXECUCAO_DRIVER;
     }
 }
 
-void inserir(char* consulta)
+int inserir(char* consulta)
 {
     ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
     if (SQL_SUCCEEDED(ret))
@@ -84,82 +98,65 @@ void inserir(char* consulta)
         ret = SQLExecDirect(stmt, (SQLCHAR*)consulta, SQL_NTS);
         if(SQL_SUCCEEDED(ret))
         {
-            printf("Envio Realizado!");
+            SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+            printf("\nEnviado!");
+            return SUCESSO;
         }
         else
         {
-            SQLCHAR sqlState[6];
-            SQLINTEGER nativeError;
-            SQLCHAR messageText[256];
-            SQLSMALLINT textLength;
-
-            SQLGetDiagRec(SQL_HANDLE_STMT, stmt, 1, sqlState, &nativeError, messageText, sizeof(messageText), &textLength);
-            printf("Erro ao enviar dados: %s\n", messageText);
+            SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+            return ERRO_EXECUTAR_CONSULTA;
         }
     }
 
     else
     {
-        SQLCHAR sqlState[6];
-        SQLINTEGER nativeError;
-        SQLCHAR messageText[256];
-        SQLSMALLINT textLength;
-
-        SQLGetDiagRec(SQL_HANDLE_STMT, stmt, 1, sqlState, &nativeError, messageText, sizeof(messageText), &textLength);
-        printf("Erro ao enviar dados: %s\n", messageText);
+        SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+        return ERRO_ALOCACAO_MEMORIA;
     }
-
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-
 }
 
-void leitura(SQLHDBC dbc, const char* consulta) {
+int leitura(SQLHDBC dbc, const char* consulta) {
+    char nome_coluna[100];
+    SQLSMALLINT num_colunas;
+    SQLCHAR buffer[1024];
+    SQLLEN len;
 
     ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
     if (SQL_SUCCEEDED(ret)) {
 
         ret = SQLExecDirect(stmt, (SQLCHAR*)consulta, SQL_NTS);
         if (SQL_SUCCEEDED(ret)) {
-            SQLSMALLINT num_colunas;
-            SQLCHAR buffer[1024];
-            SQLLEN len;
             SQLNumResultCols(stmt, &num_colunas);
-            char nome_coluna[100];
 
-
-        printf("\n");
-        for (int i = 0; i < num_colunas; i++) {
-            SQLDescribeCol(stmt, i + 1, nome_coluna, sizeof(nome_coluna), NULL, NULL, NULL, NULL, NULL);
-            printCell(nome_coluna, PAD_SQL); // Adjust the width (e.g., 20 characters)
-        }
-        printf("\n");
-
-        // Fetch and print rows
-        while (SQLFetch(stmt) == SQL_SUCCESS) {
+            printf("\n");
             for (int i = 0; i < num_colunas; i++) {
-                while (SQLGetData(stmt, i + 1, SQL_C_CHAR, buffer, sizeof(buffer), &len) == SQL_SUCCESS) {
-                    if (len > 0) {
-                        printCell(buffer, PAD_SQL); // Adjust the width (e.g., 20 characters)
-                    }
-                }
+                SQLDescribeCol(stmt, i + 1, nome_coluna, sizeof(nome_coluna), NULL, NULL, NULL, NULL, NULL);
+                printCell(nome_coluna, PAD_SQL);
             }
             printf("\n");
-        }
 
+            while (SQLFetch(stmt) == SQL_SUCCESS) {
+                for (int i = 0; i < num_colunas; i++) {
+                    while (SQLGetData(stmt, i + 1, SQL_C_CHAR, buffer, sizeof(buffer), &len) == SQL_SUCCESS) {
+                        if (len > 0) {
+                            printCell(buffer, PAD_SQL);
+                        }
+                    }
+                }
+                printf("\n");
+            }
 
+            SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+            return SUCESSO;
         } else {
-            SQLCHAR sqlState[6];
-            SQLINTEGER nativeError;
-            SQLCHAR messageText[256];
-            SQLSMALLINT textLength;
-
-            SQLGetDiagRec(SQL_HANDLE_STMT, stmt, 1, sqlState, &nativeError, messageText, sizeof(messageText), &textLength);
-            printf("Erro processando consulta: %s\n", messageText);
+            SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+            return ERRO_EXECUTAR_CONSULTA;
         }
 
-        SQLFreeHandle(SQL_HANDLE_STMT, stmt);
     } else {
-        printf("Erro na alocacao de memoria driver SQL.\n");
+        SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+        return ERRO_ALOCACAO_MEMORIA;
     }
 }
 
@@ -170,34 +167,87 @@ void liberarServico()
     SQLFreeHandle(SQL_HANDLE_ENV, env);
 }
 
-void validacaoLogin(char* usuario, char* senha) {
+int validacaoLogin(char* usuario, char* senha) {
     SQLRETURN ret;
     SQLLEN len;
+    char consulta[255];
 
     ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
     if (SQL_SUCCEEDED(ret)) {
-        char consulta[255];
         snprintf(consulta, sizeof(consulta),
             "SELECT TOP 1 ID_REGUSR FROM TB_DIM_USUARIO WHERE NM_USUAID = '%s' AND VL_PASSWD = '%s'",
             usuario, senha
         );
 
         ret = SQLExecDirect(stmt, (SQLCHAR*)consulta, SQL_NTS);
-        if (SQL_SUCCEEDED(ret)) {
-        ret = SQLBindCol(stmt, 1, SQL_C_LONG, &usrid, sizeof(usrid), NULL);
-        ret = SQLFetch(stmt);
-        if (SQL_SUCCEEDED(ret)!=1) {
-            printf("Erro resolvendo resultado: %d\n", ret);
-            SQLGetDiagRec(SQL_HANDLE_STMT, stmt, 1, NULL, NULL, NULL, 0, NULL); 
-        }
 
+        if (SQL_SUCCEEDED(ret)) {
+            ret = SQLBindCol(stmt, 1, SQL_C_LONG, &usrid, sizeof(usrid), NULL);
+            ret = SQLFetch(stmt);
+            if (SQL_SUCCEEDED(ret)!=1) {
+                SQLFreeHandle(SQL_HANDLE_DBC, dbc);
+                return ERRO_INTERPRETACAO_CONSULTA;
+            }
+            SQLFreeHandle(SQL_HANDLE_DBC, dbc);
+            return SUCESSO;
         } else {
-            printf("Erro processando consulta: %d\n", ret);
+            SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+            return ERRO_EXECUTAR_CONSULTA;
         }
-        SQLFreeHandle(SQL_HANDLE_STMT, stmt);
     } else {
-        printf("Erro na alocacao de memoria driver SQL. %d\n", ret);
+        SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+        return ERRO_ALOCACAO_MEMORIA;
     }
 }
+
+
+int exportarRelatorio(SQLHDBC dbc, const char* arquivo, const char* consulta) {
+    char nome_coluna[100];
+    SQLSMALLINT num_colunas;
+    SQLCHAR buffer[1024];
+    SQLLEN len;
+
+    ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
+    if (SQL_SUCCEEDED(ret)) {
+        ret = SQLExecDirect(stmt, (SQLCHAR*)consulta, SQL_NTS);
+        if (SQL_SUCCEEDED(ret)) {
+            SQLNumResultCols(stmt, &num_colunas);
+
+            FILE* arq = fopen(arquivo, "w");
+            if (!arq) {
+                SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+                return ERRO_ABRIR_ARQUIVO;
+            }
+
+            for (int i = 0; i < num_colunas; i++) {
+                SQLDescribeCol(stmt, i + 1, nome_coluna, sizeof(nome_coluna), NULL, NULL, NULL, NULL, NULL);
+                fprintf(arq, "\"%s\",", nome_coluna);
+            }
+            fprintf(arq, "\n");
+
+            while (SQLFetch(stmt) == SQL_SUCCESS) {
+                for (int i = 0; i < num_colunas; i++) {
+                    while (SQLGetData(stmt, i + 1, SQL_C_CHAR, buffer, sizeof(buffer), &len) == SQL_SUCCESS) {
+                        if (len > 0) {
+                            fprintf(arq, "\"%s\",", buffer);
+                        }
+                    }
+                }
+                fprintf(arq, "\n");
+            }
+
+            fclose(arq);
+            SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+            return SUCESSO;
+        } else {
+            SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+            return ERRO_EXECUTAR_CONSULTA;
+        }
+    } else {
+        SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+        return ERRO_ALOCACAO_MEMORIA;
+    }
+}
+
 
 #endif //SERVICO_H
