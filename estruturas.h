@@ -1,6 +1,8 @@
 #ifndef ESTRUTURAS_H
 #define ESTRUTURAS_H
 
+// Este arquivo contém as definições das structs utilizadas.
+
 typedef struct Funcionario
 {
     char cpf[12];
@@ -30,6 +32,7 @@ typedef struct OdbcConfig
     char database[256];
     char user[256];
     char password[256];
+    char conn_mode[256];
 } OdbcConfig;
 
 #endif //ESTRUTURAS_H
