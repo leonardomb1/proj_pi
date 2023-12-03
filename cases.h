@@ -12,20 +12,24 @@
 #include "servico.h"
 #include "interface.h"
 
+// Função para cadastro do funcionário. Utiliza conexão com banco de dados para mostrar dados em tela e inserir dados no banco.
 void criaCadastroFuncionario()
 {
-    Funcionario* novo = (Funcionario*)malloc(sizeof(Funcionario));
-    char cmd[255];
-    errosPrint(iniciarServico());
+    Funcionario* novo = (Funcionario*)malloc(sizeof(Funcionario)); // Aloca-se memoria para uma nova instancia de funcionario
+    char cmd[350]; // Variavel que armazena consulta no banco
+    int dia[3], mes[3], ano[5]; // Variaveis utilizadas para a data de admissão do funcionario
+
+    errosPrint(iniciarServico()); // Passa-se a função errosprint para resgatar os codigos de erro da função iniciarServiço e imprimir em tela. Inicia a conexão ao banco de dados
     printf("\nDigite o CPF do Funcionario (Apenas os digitos): ");       
     scanf(" %11s", novo->cpf);
     getchar();
 
+    // Laço de repetição para poder inserir espaço no nome do funcionário.
     while(1)
     {
         printf("\nDigite o Nome do Funcionario: ");
         int tam_buffer = 256;
-        char* buffer = (char*)malloc(tam_buffer);
+        char* buffer = (char*)malloc(tam_buffer); // Variavel temporaria para armazenamento de caracteres
         if (buffer==NULL)
         {
             errosPrint(ERRO_ALOCACAO_MEMORIA);
@@ -33,7 +37,7 @@ void criaCadastroFuncionario()
             system("cls");
         }
 
-        if(fgets(buffer, tam_buffer, stdin) == NULL)
+        if(fgets(buffer, tam_buffer, stdin) == NULL) // Caso a entrada for invalida ou vazia.
         {
             free(buffer);
             printf(msg_erro_entrada);
@@ -41,46 +45,69 @@ void criaCadastroFuncionario()
         }
         else
         {
-            if ((strlen(buffer) > 0) && (buffer[strlen (buffer) - 1] == '\n'))
+            if ((strlen(buffer) > 0) && (buffer[strlen (buffer) - 1] == '\n')) // Tira os caracteres de nova linha e atribui caractere fim de linha.
             {
                 buffer[strlen(buffer) - 1] = '\0';
             }
 
-            strcpy(novo->nome, buffer);
-            free(buffer);
+            strcpy(novo->nome, buffer); // copia o nome do funcionario, já tratado, para campo da struct que armazena o nome.
+            free(buffer); // Libera memoria do buffer
             break;
         }
     }
 
-    printf("\nDigite a Data de admissao no formato aaaammdd (ex: 20231231): ");
-    scanf("%8s", novo->admissao);
+    printf("\nDigite o Dia da admissao: ");
+    scanf("%2s", &dia);
+    printf("\nDigite o Mes da admissao: ");
+    scanf("%2s", &mes);
+    printf("\nDigite o Ano da admissao: ");
+    scanf("%4s", &ano);
 
+    // Interpola o dados digitados para o campo admissao da struct.
+    snprintf(novo->admissao, sizeof(novo->admissao), "%02s%02s%02s", ano, mes, dia);
+
+    // Trechos abaixo vão procurar os campos possíveis das tabelas em banco e depois solicitar a escolha ao usuário
+
+    // Mostra os cargos disponiveis para seleção
     printf("\nSelecione o codigo do cargo desejado:\n");
     errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_CARGO', 'ID_REGCAR', 'NM_CARGO', '', '', '', '', '', '';"));
     printf("\nDigite: ");
-    scanf("%1i", &novo->cargo);
+    scanf("%i", &novo->cargo);
+    getchar();
 
-
+    // Mostra as funções disponiveis para seleção
     printf("\nSelecione o codigo da funcao desejada:\n");
     errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_FUNCAO', 'ID_REGFNC', 'NM_FUNCAO', '', '', '', '', '', '';"));
     printf("\nDigite: ");
-    scanf("%1i", &novo->funcao);
+    scanf("%i", &novo->funcao);
     getchar();
 
     printf("\nO funcionario tem dependente? (S/N)\n");
     printf("\nDigite: ");
+
+    // Laço de repetição que valida escolha do usuario, se tiver dependentes continua perguntando quantos, caso contrario define dependentes como zero.
     while (1)
     {
         char escolha = getchar();
-
         if (escolha == '\n')
             continue;
 
         escolha = tolower(escolha);
         if (escolha == 's' || escolha == 'n')
         {
-            novo->dependente = (escolha == 's') ? 1 : 0;
-            break;
+            if (escolha == 's')
+            {
+                printf("\nQuantos dependentes?\nDigite: ");
+                scanf(" %i", novo->dependente);
+                (novo->dependente < 0) ? novo->dependente = 0 : novo->dependente;         
+
+                break;
+            }
+            else
+            {
+                novo->dependente = 0;
+                break;
+            }
         }
         else
         {
@@ -92,41 +119,48 @@ void criaCadastroFuncionario()
     printf("\nSelecione o codigo da filial desejada:\n");
     errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_FILIAL', 'ID_REGFIL', 'NM_FILIAL', '', '', '', '', '', '';"));
     printf("\nDigite: ");
-    scanf(" %1i", &novo->filial);
+    scanf(" %i", &novo->filial);
     getchar();
 
     printf("\nSelecione o codigo do departamento desejado:\n");
     errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_DEPTO', 'ID_REGDPT', 'NM_DEPTO', '', '', '', '', '', '';"));
     printf("\nDigite: ");
-    scanf(" %1i", &novo->depto);
+    scanf(" %i", &novo->depto);
     getchar();
 
     printf("\nInforme o Salario Inicial do Funcionario: ");
     scanf(" %f", &novo->salario);
     getchar();
 
-    snprintf(cmd, sizeof(cmd), "INSERT INTO TB_DIM_FUNCIO VALUES('%s', UPPER('%s'), '%s', DEFAULT, %i, %i, %i, %i, %i, %i, DEFAULT, DEFAULT, NULL, NULL) INSERT INTO TB_FAT_SALFUN VALUES('%s', %f, %i, DEFAULT, DEFAULT, NULL, NULL);",
-                novo->cpf, novo->nome, novo->admissao, novo->cargo, novo->funcao, novo->dependente, novo->filial, novo->depto, usrid, novo->cpf, novo->salario, usrid
+    // Interpolação dos dados inseridos pelo usuario na struct novo funcionario dentro da string de comando e executa.
+    snprintf(cmd, sizeof(cmd), "EXEC criaRegistroFuncionario '%s', '%s', '%s', %i, %i, %i, %i, %i, %f, %i;",
+                novo->cpf, novo->nome, novo->admissao, novo->cargo, novo->funcao, novo->dependente, novo->filial, novo->depto, novo->salario, usrid
             );
     
-    errosPrint(inserir(cmd));
-    liberarServico();
-    free(novo);
+    errosPrint(inserir(cmd)); // Executa comando, se acontecer erro imprime erro.
+    liberarServico(); // Libera memoria de conexão e corta conexão
+    free(novo); // Libera memoria struct
     printf("\nFuncionario cadastrado com sucesso!");
 }
 
+// Função mostra funcionario após usuario inserir cpf
 void mostrarFuncionario()
 {
-    char cpf[11], cmd[255];
+    char cpf[12], cmd[255];
     printf("\nInforme o CPF do Funcionario: ");
     scanf(" %11s", cpf);
+    // Interpolação de dados com cpf
     snprintf(cmd, sizeof(cmd), "SELECT NOME,[Dt Admis],[Sit Folha],Cargo,Salario FROM MOD.VW_FUNCIONARIOS WHERE CPF_PURO = '%s'", cpf);
+    // Inicia Serviço
     errosPrint(iniciarServico());
+    // Executa consulta
     errosPrint(leitura(dbc, cmd));
+    // Libera conexão e memoria da conexão
     liberarServico();
     printf("\n");
 }
 
+// Função para atualização de cadastro de funcionarios após escolha do usuario. Mostra informações em tela e insere no banco
 void atualizaCadastroFuncionario()
 {
     char cpf[12], cmd[255];
@@ -138,78 +172,93 @@ void atualizaCadastroFuncionario()
     do
     {
         system("cls");
-        Funcionario* alterado = (Funcionario*)malloc(sizeof(Funcionario));
+        Funcionario* alterado = (Funcionario*)malloc(sizeof(Funcionario)); // Aloca espaço em memoria HEAP para instancia de struct funcionario
         escolhaAlteracaoFuncionario();
         printf("\nDigite a sua opcao: ");
         scanf(" %i", &opcao_select);
+
+        // Abaixo menu de opções para cada alteração de funcionario
         switch (opcao_select)
         {
             case 1:
                 printf("\nSelecione o codigo do cargo desejado:\n");
+                // Mostra opções disponiveis, caso contrario mostra codigo do erro
                 errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_CARGO', 'ID_REGCAR', 'NM_CARGO', '', '', '', '', '', '';"));
                 printf("\nDigite: ");
 
-                scanf("%1i", &alterado->cargo);
+                // Executa alteração do valor no banco após seleção do usuário.
+                scanf("%i", &alterado->cargo);
                 snprintf(cmd, sizeof(cmd), "UPDATE TB_DIM_FUNCIO SET CE_CARGO = %i, DT_REGALT = DEFAULT, CD_USUAAL = '%i' WHERE CP_FUNCIO = '%s';", alterado->cargo, usrid, cpf);
                 
+                // Executa consulta, caso contrario mostra codigo do erro
                 errosPrint(inserir(cmd));
-                free(alterado);
+                free(alterado); // Libera memoria
                 getchar();
                 getchar();
                 system("cls");                    
                 break;
             case 2:
                 printf("\nSelecione o codigo do departamento desejado:\n");
+                // Mostra opções disponiveis, caso contrario mostra codigo do erro
                 errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_DEPTO', 'ID_REGDPT', 'NM_DEPTO', '', '', '', '', '', '';"));
                 printf("\nDigite: ");
                 
-                scanf(" %1i", &alterado->depto);
+                // Executa alteração do valor no banco após seleção do usuário.
+                scanf(" %i", &alterado->depto);
                 snprintf(cmd, sizeof(cmd), "UPDATE TB_DIM_FUNCIO SET CE_DEPRTO = %i, DT_REGALT = DEFAULT, CD_USUAAL = '%i' WHERE CP_FUNCIO = '%s';", alterado->depto, usrid, cpf);
                 
+                // Executa consulta, caso contrario mostra codigo do erro
                 errosPrint(inserir(cmd));
-                free(alterado);
+                free(alterado); // Libera memoria
                 getchar();
                 getchar();
                 system("cls");  
                 break;
             case 3:
                 printf("\nSelecione o codigo da filial desejada:\n");
+                // Mostra opções disponiveis, caso contrario mostra codigo do erro
                 errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_FILIAL', 'ID_REGFIL', 'NM_FILIAL', '', '', '', '', '', '';"));
                 printf("\nDigite: ");
 
-                scanf(" %1i", &alterado->filial);
+                // Executa alteração do valor no banco após seleção do usuário.
+                scanf(" %i", &alterado->filial);
                 snprintf(cmd, sizeof(cmd), "UPDATE TB_DIM_FUNCIO SET CE_FILIAL = %i, DT_REGALT = DEFAULT, CD_USUAAL = '%i' WHERE CP_FUNCIO = '%s';", alterado->filial, usrid, cpf);
+                // Executa consulta, caso contrario mostra codigo do erro
                 errosPrint(inserir(cmd));
 
-                free(alterado);
+                free(alterado); // Libera memoria
                 getchar();
                 getchar();
                 system("cls");  
                 break;
             case 4:
                 printf("\nSelecione o codigo da situacao da folha desejada:\n");
+                // Mostra opções disponiveis, caso contrario mostra codigo do erro
                 errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_SITFOL', 'ID_REGSFL', 'DS_SITFOL', '', '', '', '', '', '';"));
                 printf("\nDigite: ");
-
-                scanf(" %1i", &alterado->situacao);
+                // Executa alteração do valor no banco após seleção do usuário.
+                scanf(" %i", &alterado->situacao);
                 snprintf(cmd, sizeof(cmd), "UPDATE TB_DIM_FUNCIO SET CE_SITFOL = %i, DT_REGALT = DEFAULT, CD_USUAAL = '%i' WHERE CP_FUNCIO = '%s';", alterado->situacao, usrid, cpf);
+                // Executa consulta, caso contrario mostra codigo do erro]
                 errosPrint(inserir(cmd));
 
-                free(alterado);
+                free(alterado); // Libera memoria
                 getchar();
                 getchar();
                 system("cls");  
                 break;
             case 5:
                 printf("\nSelecione o codigo da funcao desejada:\n");
+                // Mostra opções disponiveis, caso contrario mostra codigo do erro
                 errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_FUNCAO', 'ID_REGFNC', 'NM_FUNCAO', '', '', '', '', '', '';"));
                 printf("\nDigite: ");
-
-                scanf(" %1i", &alterado->funcao);
+                // Executa alteração do valor no banco após seleção do usuário.
+                scanf(" %i", &alterado->funcao);
                 snprintf(cmd, sizeof(cmd), "UPDATE TB_DIM_FUNCIO SET CE_FUNCAO = %i, DT_REGALT = DEFAULT, CD_USUAAL = '%i' WHERE CP_FUNCIO = '%s';", alterado->funcao, usrid, cpf);
+                // Executa consulta, caso contrario mostra codigo do erro
                 errosPrint(inserir(cmd));
 
-                free(alterado);
+                free(alterado); // Libera memoria
                 getchar();
                 getchar();
                 system("cls");  
@@ -217,18 +266,29 @@ void atualizaCadastroFuncionario()
             case 6:
                 printf("\nO funcionario tem dependente? (S/N)\n");
                 printf("\nDigite: ");
+
+                // Laço de repetição que valida escolha do usuario, se tiver dependentes continua perguntando quantos, caso contrario define dependentes como zero.
                 while (1)
                 {
                     char escolha = getchar();
-                    if (escolha == '\n') {
+                    if (escolha == '\n')
                         continue;
-                    }
 
                     escolha = tolower(escolha);
                     if (escolha == 's' || escolha == 'n')
                     {
-                        alterado->dependente = (escolha == 's') ? 1 : 0;
-                        break;
+                        if (escolha == 's')
+                        {
+                            printf("\nQuantos dependentes?\nDigite: ");
+                            scanf(" %i", alterado->dependente);
+                            (alterado->dependente < 0) ? alterado->dependente = 0 : alterado->dependente; // Validacao se for digitado inteiros negativos
+                            break;
+                        }
+                        else
+                        {
+                            alterado->dependente = 0;
+                            break;
+                        }
                     }
                     else
                     {
@@ -237,14 +297,16 @@ void atualizaCadastroFuncionario()
                     }
                 }
 
-                snprintf(cmd, sizeof(cmd), "UPDATE TB_DIM_FUNCIO SET VF_DEPEND = %i, DT_REGALT = DEFAULT, CD_USUAAL = '%i' WHERE CP_FUNCIO = '%s';", alterado->dependente, usrid, cpf);
+                // Executa alteração do valor no banco após seleção do usuário.
+                snprintf(cmd, sizeof(cmd), "UPDATE TB_DIM_FUNCIO SET VL_DEPEND = %i, DT_REGALT = DEFAULT, CD_USUAAL = %i WHERE CP_FUNCIO = '%s';", alterado->dependente, usrid, cpf);
+                // Executa consulta, caso contrario mostra codigo do erro
                 errosPrint(inserir(cmd));
                 getchar();
                 getchar();
-                free(alterado);
+                free(alterado); // Libera memoria
                 break;
             case 7:
-                free(alterado);
+                free(alterado); // Libera memoria
                 break;
             
             default:
@@ -254,35 +316,43 @@ void atualizaCadastroFuncionario()
                 break;
         }
     } while (opcao_select != 7);
-    liberarServico();
+    liberarServico(); // Libera memoria de conexão e encerra conexão
 }
 
+// Função para invalidação do cadastro do funcionário sem deletá-lo do banco.
 void deletaCadastroFuncionario()
 {
     char cpf[11], cmd[255];
+    // Inicia Serviço
     errosPrint(iniciarServico());
     printf("\nInforme o CPF do Funcionario: ");
     scanf(" %11s", cpf);
-
+    
+    // Executa alteração do valor no banco após seleção do usuário.
     snprintf(cmd, sizeof(cmd), "EXEC atualizarValorRegistro 'TB_DIM_FUNCIO', '0', 'CP_FUNCIO', '%s'; EXEC atualizarValorRegistro 'TB_FAT_SALFUN', '0', 'CE_FUNCIO', '%s';", cpf, cpf);
+    // Executa consulta, caso contrario mostra codigo do erro
     errosPrint(inserir(cmd));
-    liberarServico();
+    liberarServico(); // Libera memoria da conexão e corta conexão
 }
 
+// Função de consulta de funcionarios, mostra todos os funcionarios com registro valido.
 void mostrarTodosFuncionarios()
 {
-    errosPrint(iniciarServico());
+    errosPrint(iniciarServico()); // inicia serviço
+    // Imprime valores em tela
     errosPrint(leitura(dbc, "SELECT NOME,CPF,[Dt Admis],[Sit Folha],Cargo,Salario FROM MOD.VW_FUNCIONARIOS;"));
-    liberarServico();
+    liberarServico(); // Libera memoria de conexão e corta conexão 
 }
 
+// Função para atualização do registro de acordo com escolha do usuario.
 void alterarSalario()
 {
-    errosPrint(iniciarServico());
+    errosPrint(iniciarServico()); // Inicia serviço, caso contrário mostra codigo do erro.
     char cmd[350], cpf[12];
     float novo_salario, acrescimo, percentual;
     int escolha_alteracao, cargo, funcao;
 
+    // Laço de repetição para escolha do usuário.
     do
     {
         system("cls");
@@ -294,17 +364,18 @@ void alterarSalario()
             case 1:
                 printf("\nInforme o CPF do funcionario: ");
                 scanf("%11s", &cpf);
-                
+                // Mostra opções disponiveis, caso contrario mostra codigo do erro
                 printf("\nSelecione o codigo do cargo desejado:\n");
                 errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_CARGO', 'ID_REGCAR', 'NM_CARGO', '', '', '', '', '', '';"));
                 printf("\nDigite: ");
-                scanf("%1i", &cargo);
+                scanf("%i", &cargo);
+                getchar();
 
                 printf("\nInforme o novo salario: ");
                 scanf("%f", &novo_salario);
-
-                snprintf(cmd, sizeof(cmd), "EXEC invalidaUltMov '%s'; INSERT INTO TB_FAT_SALFUN VALUES('%s', %f, %i, DEFAULT, DEFAULT, NULL, NULL); UPDATE TB_DIM_FUNCIO SET CE_CARGO = %i, CD_USUAAL = %i, DT_REGALT = DEFAULT WHERE CP_FUNCIO = '%s';", cpf, cpf, novo_salario, usrid, cargo, usrid, cpf);
-
+                // Executa Invalidação da ultima movimentação salarial e executa alteração do registro de cargo na tabela funcionarios
+                snprintf(cmd, sizeof(cmd), "EXEC invalidaUltMov '%s'; EXEC movPromocaoCargo '%s', %f, %i, %i;", cpf, cpf, novo_salario, cargo, usrid);
+                // Executa consulta, caso contrario mostra codigo do erro
                 errosPrint(inserir(cmd));
                 getchar();
                 getchar();
@@ -312,17 +383,18 @@ void alterarSalario()
             case 2:
                 printf("\nInforme o CPF do funcionario: ");
                 scanf("%11s", &cpf);
-
+                // Mostra opções disponiveis, caso contrario mostra codigo do erro
                 printf("\nSelecione o codigo do funcao desejada:\n");
                 errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_FUNCAO', 'ID_REGFNC', 'NM_FUNCAO', '', '', '', '', '', '';"));
                 printf("\nDigite: ");
-                scanf("%1i", &funcao);
-
+                scanf("%i", &funcao);
+                getchar();
+                
                 printf("\nInforme o novo salario: ");
                 scanf("%f", &novo_salario);
-                
-                snprintf(cmd, sizeof(cmd), "EXEC invalidaUltMov '%s'; INSERT INTO TB_FAT_SALFUN VALUES('%s', %f, %i, DEFAULT, DEFAULT, NULL, NULL); UPDATE TB_DIM_FUNCIO SET CE_FUNCAO = %i, CD_USUAAL = %i, DT_REGALT = DEFAULT WHERE CP_FUNCIO = '%s';", cpf, cpf, novo_salario, usrid, cargo, usrid, cpf);
-
+                // Executa Invalidação da ultima movimentação salarial e executa alteração do registro de cargo na tabela funcionarios
+                snprintf(cmd, sizeof(cmd), "EXEC invalidaUltMov '%s';EXEC movPromocaoFuncao '%s', %f, %i, %i;", cpf, cpf, novo_salario, funcao, usrid);
+                // Executa consulta, caso contrario mostra codigo do erro
                 errosPrint(inserir(cmd));
                 getchar();
                 getchar();
@@ -333,9 +405,9 @@ void alterarSalario()
 
                 printf("Informe o acrescimo a ser adicionado ao salario do funcionario: ");
                 scanf("%f", &acrescimo);
-
-                snprintf(cmd, sizeof(cmd), "EXEC invalidaUltMov %s;INSERT INTO TB_FAT_SALFUN (CE_FUNCIO, VL_SALARI, CE_USUACR, DT_REGALT) SELECT TOP 1 CE_FUNCIO, VL_SALARI + %f, %i, NULL FROM TB_FAT_SALFUN WHERE CE_FUNCIO = %s ORDER BY ID_REGSAL DESC;", cpf, acrescimo, usrid, cpf);
-
+                // Executa Invalidação da ultima movimentação salarial e executa alteração do registro de cargo na tabela funcionarios
+                snprintf(cmd, sizeof(cmd), "EXEC invalidaUltMov '%s'; EXEC movAcrescimoSalario '%s', %f, %i;", cpf, cpf, acrescimo, usrid);
+                // Executa consulta, caso contrario mostra codigo do erro
                 errosPrint(inserir(cmd));
                 getchar();
                 getchar();
@@ -348,9 +420,9 @@ void alterarSalario()
                 scanf("%f", &percentual);
 
                 percentual = 1 + (percentual/100);
-
-                snprintf(cmd, sizeof(cmd), "EXEC invalidaUltMov %s;INSERT INTO TB_FAT_SALFUN (CE_FUNCIO, VL_SALARI, CE_USUACR, DT_REGALT) SELECT TOP 1 CE_FUNCIO, VL_SALARI * %f, %i, NULL FROM TB_FAT_SALFUN WHERE CE_FUNCIO = %s ORDER BY ID_REGSAL DESC;", cpf, percentual, usrid, cpf);
-
+                // Executa Invalidação da ultima movimentação salarial e executa alteração do registro de cargo na tabela funcionarios
+                snprintf(cmd, sizeof(cmd), "EXEC invalidaUltMov '%s';EXEC movAumentoPercSalario '%s', %f, %i;", cpf, cpf, percentual, usrid);
+                // Executa consulta, caso contrario mostra codigo do erro
                 errosPrint(inserir(cmd));
                 getchar();
                 getchar();
@@ -360,9 +432,9 @@ void alterarSalario()
                 scanf("%f", &percentual);
 
                 percentual = 1 + (percentual/100);
-
+                // Atualiza toda a folha de pagamento co reajuste solicitado
                 snprintf(cmd, sizeof(cmd), "EXEC alteracaoFolha %f, %i", percentual, usrid);
-
+                // Executa consulta, caso contrario mostra codigo do erro
                 errosPrint(inserir(cmd));
                 getchar();
                 getchar();
@@ -379,15 +451,18 @@ void alterarSalario()
     } while (escolha_alteracao!=6);
     
     
-    liberarServico();
+    liberarServico(); // Libera memoria da conexão e corta conexão com servidor
 }
 
+// Função para exportar retorno do servidor em csv
 void relatorioFuncionariosCsv()
 {
-    errosPrint(iniciarServico());
+    errosPrint(iniciarServico()); // Inicia conexão com servidor
+    // Executa e armazena retorno da função em variavel
     int rel = exportarRelatorio(dbc, "relatorio_funcionarios.csv", "SELECT * FROM MOD.VW_FUNCIONARIOS_DETALHADO;");
+    // Validação de informação caso retorno não for 1, retorna o código do erro
     (rel==1) ? printf("\nRelatorio exportado!") : errosPrint(rel);
-    liberarServico();
+    liberarServico(); // Libera memoria da conexão e corta conexão com servidor
     getchar();
 }
 
@@ -398,7 +473,9 @@ void cadastroCargo()
     int tam_buffer = 256;
     printf("\nDigite o Titulo do Cargo: ");
     getchar();
-    char* buffer = (char*)malloc(tam_buffer);
+    char* buffer = (char*)malloc(tam_buffer); // Aloca-se memoria para interpretar entrada de usuario
+    
+    // Trecho abaixo recebe entrada do usuario com espaços e termina e depois copia dentro da váriavel cargo.
     if (buffer==NULL)
     {
         errosPrint(ERRO_ALOCACAO_MEMORIA);
@@ -426,13 +503,15 @@ void cadastroCargo()
     printf("\nDigite o CBO do Cargo: ");
     scanf(" %6s", &cbo);
 
-    snprintf(cmd, sizeof(cmd), "INSERT INTO TB_DIM_CARGO VALUES(UPPER('%s'), '%s', %i, DEFAULT, DEFAULT, NULL, NULL);", cargo, cbo, usrid);
+    snprintf(cmd, sizeof(cmd), "EXEC criaRegistroCargo '%s', '%s', %i;", cargo, cbo, usrid);
+    // Executa consulta, caso contrario mostra codigo do erro
     errosPrint(inserir(cmd));
     liberarServico();
     getchar();
     getchar();
 }
 
+// Função para cadastro do cliente. Solicita os dados e atualiza no banco
 void cadastroCliente()
 {
     printf("\nDigite o nome do cliete: ");
@@ -441,6 +520,7 @@ void cadastroCliente()
     int tam_buffer = 256;
     getchar();
 
+    // Trecho abaixo recebe entrada do usuario com espaços e termina e depois copia dentro da váriavel nome_cliente.
     char* buffer = (char*)malloc(tam_buffer);
     if (buffer==NULL)
     {
@@ -469,21 +549,24 @@ void cadastroCliente()
     
     printf("\nDigite o CNPJ do Cliente: ");
     scanf(" %14s", &cnpj);
-
-    snprintf(cmd, sizeof(cmd), "INSERT INTO TB_DIM_CLIENT VALUES('%s', UPPER('%s'), %i, DEFAULT, DEFAULT, NULL, NULL);", cnpj, nome_cliente, usrid);
+    snprintf(cmd, sizeof(cmd), "EXEC criaRegistroCliente '%s', '%s', %i", cnpj, nome_cliente, usrid);
+    // Executa consulta, caso contrario mostra codigo do erro
     errosPrint(inserir(cmd));
     liberarServico();
     getchar();
     getchar();
 }
 
+// Função para cadastro da venda, mostra informação em tela para escolha do usuario e executa comando de atualização do banco
 void cadastraVenda()
 {
     errosPrint(iniciarServico());
     char cmd[255];
-    Venda* nova = (Venda *)malloc(sizeof(Venda));
+    Venda* nova = (Venda *)malloc(sizeof(Venda)); // Aloca-se espaço em memória para inicializar struct de vendas
 
-    printf("\nDigite o CNPJ do Cliente: ");
+    printf("\nDigite o CNPJ do Cliente desejado:\n");
+    errosPrint(leitura(dbc, "EXEC selectNomeAlias 'TB_DIM_CLIENT', 'CP_CLIENT', 'NM_CLIENT', '', '', '', '', '', '';"));
+    printf("\nDigite: ");
     scanf("%14s", nova->cnpj);
 
     printf("\nSelecione o codigo do produto desejado:\n");
@@ -500,13 +583,15 @@ void cadastraVenda()
     scanf("%d", &nova->qtde_venda);
     getchar();
 
-    snprintf(cmd, sizeof(cmd), "INSERT INTO TB_FAT_VENDA VALUES('%s', %i, %f, %i, DEFAULT, DEFAULT, NULL, NULL, %i);", nova->cnpj, nova->prod, nova->valor_venda, usrid, nova->qtde_venda);
-    errosPrint(inserir(cmd));
+    snprintf(cmd, sizeof(cmd), "EXEC criaRegistroVenda '%s', %i, %f, %i, %i", nova->cnpj, nova->prod, nova->valor_venda, nova->qtde_venda, usrid);
+    // Executa consulta, caso contrario mostra codigo do erro
+    errosPrint(inserir(cmd)); 
     liberarServico();
     free(nova);
     getchar();
 }
 
+// Função para invalidação do cadastro do cliente. Atualiza registro no banco.
 void deletaCadastroCliente()
 {
     char cnpj[15], cmd[255];
@@ -518,7 +603,7 @@ void deletaCadastroCliente()
     errosPrint(inserir(cmd));
     liberarServico();
 }
-
+// Função para retornar todos os clientes. Faz consulta no banco.
 void mostrarTodosClientes()
 {
     errosPrint(iniciarServico());
@@ -526,6 +611,7 @@ void mostrarTodosClientes()
     liberarServico();
 }
 
+// Função que solicita o usuario escolher relatorio e depois imprime este na tela
 void mostrarTodasVendas()
 {
     int opcao;
@@ -555,10 +641,13 @@ void mostrarTodasVendas()
     liberarServico();
 }
 
+// Função para exportar retorno do servidor em csv
 void relatorioVendasCsv()
 {
     errosPrint(iniciarServico());
+    // Executa e armazena retorno da função em variavel
     int rel = exportarRelatorio(dbc, "relatorio_vendas.csv", "SELECT * FROM MOD.VW_VENDAS;");
+    // Validação de informação caso retorno não for 1, retorna o código do erro
     (rel==1) ? printf("\nRelatorio exportado!") : errosPrint(rel);
     liberarServico();
     getchar();
